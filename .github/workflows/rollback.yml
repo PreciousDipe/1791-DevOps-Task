@@ -1,6 +1,11 @@
+# ---------------------------------------------------------------------------
+#  ROLLBACK WORKFLOW
+#  Purpose : Provide automated and manual rollback capabilities.
+# ---------------------------------------------------------------------------
 name: rollback and recovery pipeline
 
 on:
+  # Manual trigger from the Actions UI
   workflow_dispatch:
     inputs:
       environment:
@@ -11,12 +16,16 @@ on:
           - development
           - production
 
+  # Automatic trigger if the CD pipeline concludes (success or failure)
   workflow_run:
     workflows: ["continuous deployment pipeline"]
     types:
       - completed
 
 jobs:
+  # -------------------------------------------------------------------------
+  # 1. Manual rollback (workflow_dispatch)
+  # -------------------------------------------------------------------------
   rollback:
     runs-on: self-hosted
     if: github.event_name == 'workflow_dispatch'
@@ -28,8 +37,10 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      # Determine branch & previous image tag, then redeploy
       - name: Manual rollback logic
         run: |
+          # Map chosen environment to branch
           if [ "${{ github.event.inputs.environment }}" == "development" ]; then
             BRANCH="dev"
           elif [ "${{ github.event.inputs.environment }}" == "production" ]; then
@@ -47,6 +58,9 @@ jobs:
             docker run -d --name app -p 80:80 ghcr.io/preciousdipe/1791-devops-task:$PREVIOUS_TAG
           EOF
 
+  # -------------------------------------------------------------------------
+  # 2. Automatic rollback (fires only when CD job fails)
+  # -------------------------------------------------------------------------
   auto-rollback:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: self-hosted
