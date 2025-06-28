@@ -1,9 +1,6 @@
 name: continous integration pipeline
 on:
-  push:
-    branches:
-      - dev
-      - master
+  
   pull_request:
     branches:
       - master
