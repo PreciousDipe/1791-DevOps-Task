@@ -1,4 +1,3 @@
-# .github/workflows/rollback.yml
 name: rollback pipeline
 
 on:
