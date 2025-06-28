@@ -1,4 +1,9 @@
-# .github/workflows/ci-cd.yml
+# ---------------------------------------------------------------------------
+#  CD WORKFLOW
+#  Purpose : Build a Docker image, push it to GHCR and deploy it
+#            to the appropriate environment (dev or production).
+#  Trigger : push events to dev or master.
+# ---------------------------------------------------------------------------
 name: continuous deployment pipeline
 
 on:
@@ -8,17 +13,23 @@ on:
       - master
 
 jobs:
+  # -------------------------------------------------------------------------
+  # 1. Build-and-Push job  (runs on GitHub-hosted runner)
+  #    - Builds image and pushes to GHCR.
+  # -------------------------------------------------------------------------
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       packages: write
-      contents: read
+      contents: read    # Needed to push to ghcr.io
+    # Guard-clause so the job doesn’t run for other branches
     if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v3
-
+      # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      # Build the Docker image and expose the tag to later jobs
 
       - name: Build Docker image
         run: |
@@ -26,10 +37,15 @@ jobs:
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           docker build -t $IMAGE_TAG .
 
+      # Push image to GHCR
       - name: Push Docker image
         run: |
           docker push $IMAGE_TAG
 
+  # -------------------------------------------------------------------------
+  # 2. Deploy-Dev job  (runs on self-hosted runner)
+  #    - Executes only for the dev branch.
+  # -------------------------------------------------------------------------
   deploy-dev:
     runs-on: self-hosted
     needs: build-and-push
@@ -38,11 +54,13 @@ jobs:
       name: development
     steps:
       - uses: actions/checkout@v3
+       # Start SSH agent with private key stored in GitHub Secrets
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
+      
+      # Pull and run container on the development server
       - name: Deploy to dev environment
         run: |
           IMAGE_TAG=ghcr.io/preciousdipe/1791-devops-task:dev-${{ github.run_number }}
@@ -53,6 +71,10 @@ jobs:
             docker run -d --name app -p 80:80 $IMAGE_TAG
           EOF
 
+  # -------------------------------------------------------------------------
+  # 3. Deploy-Prod job  (runs on self-hosted runner)
+  #    - Executes only for the master branch.
+  # -------------------------------------------------------------------------
   deploy-prod:
     runs-on: self-hosted
     needs: build-and-push
