@@ -16,14 +16,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # ✅ Using GITHUB_TOKEN to authenticate to GHCR
-      - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+    #   # ✅ Using GITHUB_TOKEN to authenticate to GHCR
+    #   - name: Log in to GitHub Container Registry
+    #     run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # ✅ Alternative (fallback) using PAT stored in GHCR_PAT
-      # Uncomment if GITHUB_TOKEN fails and GHCR_PAT is set in your secrets
-      # - name: Log in to GHCR with PAT
-      #   run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u preciousdipe --password-stdin
+    #   ✅ Alternative (fallback) using PAT stored in GHCR_PAT
+    #   Uncomment if GITHUB_TOKEN fails and GHCR_PAT is set in your secrets
+      - name: Log in to GHCR with PAT
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u preciousdipe --password-stdin
 
       - name: Build Docker image
         run: |
