@@ -1,4 +1,4 @@
-name: rollback pipeline
+name: rollback and recovery pipeline
 
 on:
   workflow_dispatch:
