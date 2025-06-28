@@ -1,0 +1,70 @@
+name: rollback pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to roll back'
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+
+  workflow_run:
+    workflows: ["continuous deployment pipeline"]
+    types:
+      - completed
+
+jobs:
+  rollback:
+    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Manual rollback logic
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "development" ]; then
+            BRANCH="dev"
+          elif [ "${{ github.event.inputs.environment }}" == "production" ]; then
+            BRANCH="master"
+          else
+            echo "Invalid environment" && exit 1
+          fi
+
+          PREVIOUS_TAG="$BRANCH-$(( ${{ github.run_number }} - 1 ))"
+
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} << EOF
+            set -e
+            docker stop app || true && docker rm app || true
+            docker pull ghcr.io/preciousdipe/1791-devops-task:$PREVIOUS_TAG
+            docker run -d --name app -p 80:80 ghcr.io/preciousdipe/1791-devops-task:$PREVIOUS_TAG
+          EOF
+
+  auto-rollback:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: self-hosted
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Derive previous tag and rollback
+        run: |
+          BRANCH=${{ github.event.workflow_run.head_branch }}
+          CURRENT_RUN=${{ github.event.workflow_run.run_number }}
+          PREVIOUS_TAG="$BRANCH-$(( CURRENT_RUN - 1 ))"
+
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} << EOF
+            set -e
+            docker stop app || true && docker rm app || true
+            docker pull ghcr.io/preciousdipe/1791-devops-task:$PREVIOUS_TAG
+            docker run -d --name app -p 80:80 ghcr.io/preciousdipe/1791-devops-task:$PREVIOUS_TAG
+          EOF
